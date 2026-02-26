@@ -4,7 +4,7 @@ import os
 import re 
 
 from research_engine import run_research
-from memory_engine import store_item, retrieve
+from memory_engine import store_item, retrieve, export_chroma_readable
 from memory_extract import extract_memories 
 
 MEMORY_FILE = "memory.json"
@@ -101,6 +101,17 @@ def analyze_user_input(user_text):
 print("Sokrates ready. Type 'exit' to quit.\n")
 
 
+# Export entire Chroma DB to JSON and filter by importance for debugging/inspection
+def get_all_entries(kind=None, include_embeddings=False):
+    try:
+        all_entries = export_chroma_readable(include_embeddings=False)
+        with open("all_chroma.json", "w", encoding="utf-8") as f:
+            json.dump(all_entries, f, indent=2, ensure_ascii=False)
+        print("[Exported chroma DB] all_chroma.json")
+    except Exception as e:
+        print("[Failed to export chroma DB]", e)
+
+
 # -----------------------------
 # Main conversation loop
 # -----------------------------
@@ -111,7 +122,7 @@ while True:
         context_chunk = "\n".join(
             [f"{m['role'].upper()}: {m['content']}" for m in messages[-12:]]
         )
-
+        
         print("\n[Research mode] Running web research...\n")
 
         report, queries, search_results, fetched = run_research(context_chunk)
@@ -143,6 +154,10 @@ while True:
             print("\nSokrates (research summary):", summary, "\n")
         else:
             print("\nSokrates: No research found yet. Run `research` first.\n")
+        continue
+
+    if user.lower().strip() == "export memory":
+        get_all_entries()
         continue
     
     if user.lower() == "exit":
