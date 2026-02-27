@@ -11,18 +11,19 @@ def fake_ts(days_ago: int) -> str:
 
 def inject_test_memories():
     test_items = [
-        ("User prefers dark mode",           "profile",   "memory", 0.8,  2),
-        ("Project: build Sokrates web app",  "entity",    "memory", 0.9,  5),
-        ("User likes chess",                 "profile",   "memory", 0.7,  10),
+        # --- Should SURVIVE (recent or high importance + slow decay) ---
+        ("User prefers dark mode",           "profile",         "memory", 0.8,  2),   # 0.8  - (0.003*2)  = 0.794 ✓
+        ("Project: build Sokrates web app",  "entity",          "memory", 0.9,  5),   # 0.9  - (0.005*5)  = 0.875 ✓
+        ("User likes chess",                 "profile",         "memory", 0.7,  10),  # 0.7  - (0.003*10) = 0.670 ✓
 
-        # Should DECAY but survive
-        ("User mentioned feeling tired",     "episode",   "memory", 0.65, 10),
-        ("Open task: review memory engine",  "open_loop", "memory", 0.6,  15),
+        # --- Should DECAY but survive ---
+        ("User mentioned feeling tired",     "episode",         "memory", 0.65, 10),  # 0.65 - (0.03*10)  = 0.350 ✓
+        ("Open task: review memory engine",  "open_loop",       "memory", 0.6,  15),  # 0.6  - (0.015*15) = 0.375 ✓
 
-        # Should be PRUNED — make them older/weaker so they cross 0.09
-        ("Research: quantum computing 2024", "research",  "memory", 0.4,  30),  # 0.4 - (0.04*30) = -0.8 → pruned
-        ("Source: some-old-url.com",         "research_source","memory", 0.3, 20),  # 0.3 - (0.05*20) = -0.7 → pruned
-        ("User said hello",                  "episode",   "memory", 0.25, 15),  # 0.25 - (0.03*15) = -0.2 → pruned
+        # --- Should be PRUNED (raw value drops below 0.09) ---
+        ("Research: quantum computing 2024", "research",        "memory", 0.4,  30),  # 0.4  - (0.04*30)  = -0.8  → pruned
+        ("Source: some-old-url.com",         "research_source", "memory", 0.3,  20),  # 0.3  - (0.05*20)  = -0.7  → pruned
+        ("User said hello",                  "episode",         "memory", 0.25, 15),  # 0.25 - (0.03*15)  = -0.2  → pruned
     ]
     
     for text, tag, kind, importance, days_ago in test_items:

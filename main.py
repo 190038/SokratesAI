@@ -19,6 +19,7 @@ MODEL = "deepseek-r1:8b"
 if os.path.exists(MEMORY_FILE):
     with open(MEMORY_FILE, "r") as f:
         messages = json.load(f)
+    messages = messages[-20:]
 else:
     messages = []
 
@@ -119,10 +120,16 @@ def get_all_entries(kind=None, include_embeddings=False):
 while True:
     user = input("You: ")
     if user.lower().strip() == "research":
-        # Use last ~12 messages as the "topic context"
-        context_chunk = "\n".join(
-            [f"{m['role'].upper()}: {m['content']}" for m in messages[-12:]]
+        # Use only the last user message as the research topic.
+        # Don't feed history — a small model can't reliably pick the right topic from a mix.
+        last_user_msg = next(
+            (m["content"] for m in reversed(messages) if m["role"] == "user"),
+            None
         )
+        if not last_user_msg:
+            print("\nSokrates: Nothing to research yet — say something first.\n")
+            continue
+        context_chunk = last_user_msg
         
         print("\n[Research mode] Running web research...\n")
 
@@ -249,7 +256,8 @@ while True:
 
         print("\nSokrates:", reply, "\n")
 
-        # Add assistant reply to chat memory
+        # Append both turns — user message was missing before
+        messages.append({"role": "user", "content": user})
         messages.append({"role": "assistant", "content": reply})
     
             # Load profile for extraction context

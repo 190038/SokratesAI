@@ -62,35 +62,128 @@ def fetch_page(url: str) -> str:
     return _clean_text(resp.text)
 
 
-def generate_research_queries(conversation_text: str, n=6):
+def _extract_research_intent(text: str) -> dict:
+    """Stage 1: extract structured intent from a single user message."""
+    import json, re
+
     prompt = [
         {
             "role": "system",
             "content": (
-                "Extract the main research topic or question from the conversation below.\n"
-                f"Then generate EXACTLY {n} focused, specific web search queries directly related to that topic.\n"
-                "Each query should target the user's actual question, not unrelated topics.\n"
-                "Return ONLY a JSON array of {n} short search query strings.\n"
-                "Example: [\"Martin Sellner identitarian movement\", \"identitarian movement founder\", ...]\n"
-                "No markdown, no explanation, no commentary."
+                "Extract the research intent from the user message.\n"
+                "Return ONLY a JSON object with these fields:\n"
+                "  topic       - main topic in 3-8 words\n"
+                "  subtopics   - list of 2-4 specific subtopics or angles\n"
+                "  key_terms   - list of 3-6 domain-specific terms\n"
+                "  time_filter - one of: 'latest', 'historical', 'any'\n"
+                "  domain      - e.g. 'medicine', 'finance', 'software', 'science', 'general'\n"
+                "  goal        - one of: 'understand', 'compare', 'evaluate', 'find_data', 'how_to'\n"
+                "No markdown, no explanation."
             )
         },
-        {"role": "user", "content": f"Generate search queries for this conversation:\n\n{conversation_text}"}
+        {"role": "user", "content": text[:2000]}
     ]
-    r = ollama.chat(model=MODEL, messages=prompt)["message"]["content"]
 
-    # super simple fallback if JSON is messy
-    # try to extract lines if JSON parse fails
-    import json, re
+    raw = ollama.chat(model=MODEL, messages=prompt)["message"]["content"]
+
     try:
-        return json.loads(r)
-    except:
-        # extract quoted strings as a fallback
-        qs = re.findall(r'"([^"]+)"', r)
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+    except Exception:
+        pass
+
+    return {"topic": text[:80], "subtopics": [], "key_terms": [],
+            "time_filter": "any", "domain": "general", "goal": "understand"}
+
+
+def _build_query_prompt(intent: dict, n: int) -> str:
+    time_instruction = {
+        "latest":     "Include recency modifiers like '2024', '2025', 'recent', 'new study'.",
+        "historical": "Include historical or archival modifiers where relevant.",
+        "any":        "Mix timeless and current queries."
+    }.get(intent.get("time_filter", "any"), "")
+
+    goal_instruction = {
+        "understand": "Focus on explainers and foundational resources.",
+        "compare":    "Focus on comparisons and 'X vs Y' queries.",
+        "evaluate":   "Focus on critiques, pros/cons, and expert opinions.",
+        "find_data":  "Focus on datasets, statistics, and empirical studies.",
+        "how_to":     "Focus on tutorials and implementation guides."
+    }.get(intent.get("goal", "understand"), "")
+
+    return (
+        f"Generate exactly {n} highly specific web search queries about:\n\n"
+        f"TOPIC: {intent.get('topic', '')}\n"
+        f"SUBTOPICS: {', '.join(intent.get('subtopics', []))}\n"
+        f"KEY TERMS: {', '.join(intent.get('key_terms', []))}\n"
+        f"DOMAIN: {intent.get('domain', 'general')}\n\n"
+        f"- {time_instruction}\n"
+        f"- {goal_instruction}\n"
+        "- Each query must be 6-14 words — specific enough to return focused results.\n"
+        "- Cover different angles (overview, deep-dive, recent, compare, critical, data).\n"
+        "- No vague queries like 'what is X'. No repeated angles.\n"
+        "- Return ONLY a valid JSON array of strings. No markdown, no explanation."
+    )
+
+
+def generate_research_queries(conversation_text: str, n=6):
+    import json, re
+
+    intent = _extract_research_intent(conversation_text)
+
+    prompt = [
+        {"role": "system", "content": _build_query_prompt(intent, n)},
+        {"role": "user", "content": conversation_text[:2000]}
+    ]
+    raw = ollama.chat(model=MODEL, messages=prompt)["message"]["content"]
+
+    def _parse(text: str, limit: int) -> list:
+        text = text.strip()
+        try:
+            result = json.loads(text)
+            if isinstance(result, list):
+                return [str(q).strip() for q in result if str(q).strip()][:limit]
+        except Exception:
+            pass
+        match = re.search(r"\[.*?\]", text, re.DOTALL)
+        if match:
+            try:
+                result = json.loads(match.group(0))
+                if isinstance(result, list):
+                    return [str(q).strip() for q in result if str(q).strip()][:limit]
+            except Exception:
+                pass
+        qs = re.findall(r'"([^"]{10,})"', text)
         if qs:
-            return qs[:n]
-        # last resort: split lines
-        return [ln.strip("- ").strip() for ln in r.splitlines() if ln.strip()][:n]
+            return qs[:limit]
+        return [
+            re.sub(r"^\s*[\d\.\-\*\[\w\]]+\s*", "", ln).strip()
+            for ln in text.splitlines()
+            if ln.strip() and len(ln.strip()) > 10
+        ][:limit]
+
+    queries = _parse(raw, n)
+
+    # Dedup by first-5-word prefix
+    seen, deduped = set(), []
+    for q in queries:
+        prefix = " ".join(q.lower().split()[:5])
+        if prefix not in seen:
+            seen.add(prefix)
+            deduped.append(q)
+
+    # Pad if needed
+    topic = intent.get("topic", conversation_text[:60])
+    for fb in [f"{topic} in depth", f"{topic} recent studies 2025", f"{topic} limitations evidence"]:
+        if len(deduped) >= n:
+            break
+        prefix = " ".join(fb.lower().split()[:5])
+        if prefix not in seen:
+            seen.add(prefix)
+            deduped.append(fb)
+
+    return deduped
 
 
 def summarize_sources(topic_context: str, sources: list):
