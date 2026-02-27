@@ -67,12 +67,15 @@ def generate_research_queries(conversation_text: str, n=6):
         {
             "role": "system",
             "content": (
-                "You generate web research queries.\n"
-                f"Return ONLY a JSON array of {n} short search queries.\n"
-                "No markdown, no explanation."
+                "Extract the main research topic or question from the conversation below.\n"
+                f"Then generate EXACTLY {n} focused, specific web search queries directly related to that topic.\n"
+                "Each query should target the user's actual question, not unrelated topics.\n"
+                "Return ONLY a JSON array of {n} short search query strings.\n"
+                "Example: [\"Martin Sellner identitarian movement\", \"identitarian movement founder\", ...]\n"
+                "No markdown, no explanation, no commentary."
             )
         },
-        {"role": "user", "content": conversation_text}
+        {"role": "user", "content": f"Generate search queries for this conversation:\n\n{conversation_text}"}
     ]
     r = ollama.chat(model=MODEL, messages=prompt)["message"]["content"]
 

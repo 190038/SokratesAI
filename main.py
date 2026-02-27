@@ -4,12 +4,13 @@ import os
 import re 
 
 from research_engine import run_research
-from memory_engine import store_item, retrieve, export_chroma_readable
+from memory_engine import store_item, retrieve, export_chroma_readable, decay_memories
 from memory_extract import extract_memories 
 
 MEMORY_FILE = "memory.json"
 PROFILE_FILE = "user_profile.json"
 MODEL = "deepseek-r1:8b"
+
 
 
 # -----------------------------
@@ -127,6 +128,11 @@ while True:
 
         report, queries, search_results, fetched = run_research(context_chunk)
 
+        print("[Search queries]")
+        for q in queries:
+            print(f"  • {q}")
+        print()
+
         # Save a readable report
         with open("research_report.md", "w", encoding="utf-8") as f:
             f.write("# Sokrates Research Report\n\n")
@@ -154,6 +160,24 @@ while True:
             print("\nSokrates (research summary):", summary, "\n")
         else:
             print("\nSokrates: No research found yet. Run `research` first.\n")
+        continue
+    
+    if user.lower().strip() == "decay dry run":
+        report = decay_memories(dry_run=True)
+
+        print(f"\n[Decay dry run]")
+        print(f"  Would decay:  {report['decayed']}")
+        print(f"  Would prune:  {report['pruned']}")
+        print(f"  Skipped:      {report['skipped']}")
+
+        for item in report["report"]:
+            print(
+                f"  [{item['action'].upper():5}] "
+                f"idle={item['days_idle']}d  "
+                f"imp {item['old_imp']} → {item['new_imp']}  "
+                f"tag={item['tag']:15}  "
+                f"\"{item['text']}\""
+            )
         continue
 
     if user.lower().strip() == "export memory":

@@ -1,14 +1,18 @@
 {
   "interests": [
-    "web app",
     "WhatsApp connection",
-    "AI visualization"
+    "AI visualization",
+    "Cigarettes",
+    "immigration",
+    "web app"
   ],
   "projects": [
-    "WhatsApp agent system",
-    "AI chat web app"
+    "AI chat web app",
+    "WhatsApp agent system"
   ],
   "reasoning_style": "",
   "recurring_topics": [],
-  "long_term_questions": []
+  "long_term_questions": [
+    "immigration"
+  ]
 }
