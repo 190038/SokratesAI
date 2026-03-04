@@ -1,7 +1,0 @@
-# Requirements for SokratesAI (generated)
-ollama
-chromadb
-sentence-transformers
-ddgs
-requests
-beautifulsoup4
